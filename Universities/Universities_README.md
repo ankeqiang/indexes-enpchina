@@ -1,0 +1,48 @@
+# Universities files: what's in this folder
+
+Last updated: 2026-09-10
+
+There are two families of files here. The first (Index_China_Univ_Corr, Index_China_Schools_bilingual, Index_Foreign_Univ_bilingual) is about identifying institutions from the Chinese side: matching a raw Chinese institution name found in a historical source to a standardized Chinese name and an English name. The second (Index_US_universities_ZH_LocCoord, Index_US_universities_all_LocCoord) is about the US side: locating an American institution and attaching geocoordinates, for a name that's already been identified in English.
+
+## Chinese-side identification
+
+### Index_China_Univ_Corr.csv (2,050 rows)
+
+The primary correcting index for Chinese institution names. Columns: `Univ_ZhT_Srce` (the raw name as found in a source), `Univ_ZhT_Strd` (the standardized Chinese name), `Univ_Eng` (the canonical English name), `Status_ZhT` / `Status_Eng` (QA flags, populated on only a handful of rows), and `Eng_Source`, which is blank for the file's original 1,562 rows and reads `Claude Sonnet 5 (compositional)` on 488 rows added this session.
+
+Those 488 rows came from `Index_China_Schools_bilingual.csv`: Chinese school names not yet in this file, none of which had an English gloss in their source. Rather than add them with a blank `Univ_Eng`, I built a compositional translator that decomposes the highly formulaic Republican-era naming pattern (place, admin level such as 國立/省立/私立, ordinal, subject, institution-type suffix such as 大學/學院/中學) and only produces a translation when every part of the name is recognized, refusing to guess otherwise. Out of 1,841 candidate terms, 488 decomposed cleanly; the rest were left out of this file. The translator script is `_normalizer/translate_china_schools_v2.py`, kept for reference or a future pass.
+
+This file also went through a substantial cleanup earlier in the same session: several concatenation and prefix-disagreement errors in ambiguous entries were resolved by hand with Christian, all `北平` references in `Univ_ZhT_Strd` were normalized to `北京` (English `Peiping` was left as is), and a systematic row-misalignment corruption in `Univ_Eng` (English glosses shifted between alphabetically adjacent Chinese entries, mostly in the ordinal "provincial normal/middle school" series) was detected by cross-referencing against `Index_China_Schools_bilingual.csv` and corrected after review. Three duplicate full rows left over from the concatenation fixes were also removed. The file currently has zero ambiguous keys and zero duplicate rows.
+
+Two review files from this work sit in `_normalizer/reports/`:
+
+- `Index_China_Univ_Corr_CANDIDATE_FIXES.csv`: the row-misalignment corrections, with evidence, as reviewed and approved by Christian. Kept for the audit trail.
+- `Index_China_Univ_Corr_NONSCHOOL_FLAGGED.csv`: 35 terms found among the candidate additions from `Index_China_Schools_bilingual.csv` that don't look like schools at all (hospitals, Central Training Corps programs, civil-service exams), each with a best-guess English gloss and a confidence note. These were not added to Univ_Corr; they're waiting on a case-by-case decision about which, if any, belong here.
+
+### Index_China_Schools_bilingual.csv (3,132 rows)
+
+Source: 中国留学生大辞典, the CUSDOS dataset, and the MGZF_1944 dataset. Columns: `Univ_ZhT_Strd` (a Chinese name variant, since the same institution can appear under different spellings or sub-level designations), `Univ_Eng` (the canonical English name where known; still blank on about 1,842 rows), and `Status_ZhT` / `Status_Eng`, which despite the names hold single-letter QA flags (such as `C` or `V`), not a second name pair as the column names might suggest. Not modified this session; used only as a cross-reference source, both for detecting the Univ_Corr corruption above and as the source of the 1,841 candidate terms for enrichment.
+
+### Index_Foreign_Univ_bilingual.csv (2,369 rows)
+
+Source: the same three datasets, covering foreign (non-US) institutions students attended. Columns: `UnivFor_ZhT_Srce`, `Univ_Eng`, `City`, `State`, `Country`, `Country_ZhT`, `Latitude`, `Longitude`, plus three unnamed trailing columns. Country breakdown is dominated by Japan, France, Russia, the UK and Germany; only a handful of rows are China or Taiwan, so this file has little overlap with Index_China_Univ_Corr. Not modified this session. Known issue, not yet fixed: 531 rows have their latitude/longitude decimal fraction spilled into the trailing unnamed columns (a comma-as-decimal-separator meeting the comma delimiter), which is fixable by concatenating the columns back with a decimal point whenever Christian wants it done.
+
+## US-side location and geocoding
+
+### Index_US_universities_ZH_LocCoord.csv (2,167 rows)
+
+The list of current US universities and colleges as cross-referenced against the Chinese-language sources (中国留学生大辞典, CUSDOS, MGZF_1944). Columns: `School_Name_ZhT`, `School_Name`, `City`, `State`, `lat`, `lng`, `Univ_Py` (a pinyin romanization, populated only on the unidentified rows described below), `Country`, `Country_ZhT`. Because the Chinese sources only cover institutions historically attended by Chinese students, most current US universities (about three-quarters of the rows) have no Chinese name attached; that's expected, not an error. Some English names are intentionally duplicated across rows where a school has more than one attested Chinese name.
+
+At the end of the file, 41 rows have a Chinese name and a pinyin romanization but no English match at all (blank `School_Name`, `City`, `State`, `lat`, `lng`): institutions never identified against a current US institution. This is a different count from the 25 Christian recalled; the discrepancy hasn't been resolved. The file's total row count (2,167) also doesn't match the 2,267 originally described; this has been checked against the raw file with two different CSV parsers and isn't a parsing artifact, but the source of the gap is otherwise unexplained.
+
+This session: removed one exact duplicate row, corrected a latitude/longitude column swap on one of the two Campbellsville University rows (and dropped the resulting redundant duplicate), fixed a data entry error where the University of Washington row listed its state as Oregon instead of Washington, and removed the `Notes` column. That column held Chinese-language QA annotations from an earlier review pass, useful in places (flagging that two rows represent the same institution under different Chinese names, or institutional name-history footnotes) but partly stale: the row numbers it cited didn't match this file's current row positions, and at least two notes appeared to be misattached to the wrong row (a copy-paste artifact from an earlier spreadsheet version). That content still exists in the pre-deletion backup in `_normalizer/backups/` if it's ever needed again.
+
+### Index_US_universities_all_LocCoord.csv (6,559 rows, 17 columns)
+
+A government open-data extract (HIFLD/NCES) of every current college and university in the United States, with address, geocoordinates, county, phone and similar fields, used for matching and geocoding institutions that aren't already in Index_US_universities_ZH_LocCoord.csv. The file arrived with 45 columns, most of them administrative metadata Christian didn't need (an internal object ID, redundant GeoJSON geometry fields, FIPS codes, enrollment and dormitory figures, and several coded classification fields whose official definitions I could not verify despite a fair amount of searching, so I left them out rather than mislabel them). It's now trimmed to the fields Christian described needing (name, address, city, state, zip, county, county population, website, geocoordinates) plus a few clearly useful extras: `IPEDSID` (a stable join key), `ALIAS` (alternate names, useful for matching older historical spellings), `COUNTRY` (mostly USA, but includes Puerto Rico and a few other US territories), `TYPE` / `TYPE_LABEL` (Public, Private not-for-profit, or Private for-profit, a standard IPEDS classification), `INSTITUTION_CATEGORY` (a plain-English category already present in the source data, such as "Colleges, Universities, and Professional Schools" versus "Cosmetology and Barber Schools"), and `NCES_SOURCE_URL` (a direct link to each institution's NCES College Navigator page). The placeholder text "NOT AVAILABLE" was converted to real blanks throughout. 209 `NAME` values appear more than once; these are legitimate multi-campus institutions in different cities, not duplicates.
+
+The full, untrimmed 45-column extract is preserved in `_normalizer/backups/` if a dropped field (enrollment, housing, or one of the unverified classification codes) is ever needed. A slightly fuller trimmed version that still includes the `TELEPHONE` column sits in `_normalizer/reports/Index_US_universities_all_LocCoord_CLEANED.csv`.
+
+## How they fit together
+
+To identify a Chinese institution name from a historical source, match it against `Index_China_Univ_Corr.csv` first. If it's not there, `Index_China_Schools_bilingual.csv` covers a wider set of Chinese name variants, though many still lack an English gloss. If the institution is outside both China and the US, check `Index_Foreign_Univ_bilingual.csv`. Once an English name is in hand and the source describes study in the United States, `Index_US_universities_ZH_LocCoord.csv` gives a head start for institutions already matched to a Chinese name; `Index_US_universities_all_LocCoord.csv` is the fallback for everything else, or for pulling address and county detail that ZH_LocCoord doesn't carry.
